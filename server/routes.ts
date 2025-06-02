@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import OpenAI from "openai";
 import { storage } from "./storage";
+import { NeuralEngine } from "./neural-engine";
 import { 
   insertSessionSchema, insertReflectionSchema, insertMemoryInsightSchema, 
   insertGeneratedContentSchema, type WebSocketMessage, type Session 
@@ -46,10 +47,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     private session: Session | null = null;
     private currentCycle = 0;
     private isGenerating = false;
+    private neuralEngine: NeuralEngine | null = null;
 
     async startReflectionLoop(sessionId: number, userInput: string, reflectionCycles: number, noiseLevel: number) {
       this.session = await storage.getSession(sessionId);
       if (!this.session) throw new Error('Session not found');
+      
+      // Initialize neural engine for this session
+      this.neuralEngine = new NeuralEngine(sessionId);
+      await this.neuralEngine.loadWeights();
       
       this.currentCycle = 0;
       this.isGenerating = true;
@@ -68,11 +74,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           this.currentCycle = cycle;
           await this.performReflectionCycle(sessionId, userInput, cycle, noiseLevel);
           
+          // Train neural network on each cycle
+          if (this.neuralEngine) {
+            await this.neuralEngine.trainStep(userInput, broadcast);
+          }
+          
           // Add delay between cycles
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        // Generate final content
+        // Generate final content using custom neural network
         await this.generateFinalContent(sessionId, userInput);
       } catch (error) {
         console.error('Reflection loop error:', error);
