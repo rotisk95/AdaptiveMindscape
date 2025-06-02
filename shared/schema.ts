@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, real, vector } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -50,6 +50,54 @@ export const generatedContent = pgTable("generated_content", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
+// Neural network components for custom weights and tokenization
+export const modelWeights = pgTable("model_weights", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => sessions.id),
+  layerName: text("layer_name").notNull(),
+  weights: jsonb("weights").notNull(), // Store weight matrices as JSON
+  biases: jsonb("biases"),
+  gradients: jsonb("gradients"),
+  learningRate: real("learning_rate").default(0.001),
+  lastUpdated: timestamp("last_updated").defaultNow(),
+});
+
+export const tokenVocabulary = pgTable("token_vocabulary", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => sessions.id),
+  token: text("token").notNull(),
+  tokenId: integer("token_id").notNull(),
+  frequency: integer("frequency").default(1),
+  embedding: jsonb("embedding"), // Token embedding vector
+  subwordComponents: jsonb("subword_components"), // BPE/subword breakdown
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const trainingBatches = pgTable("training_batches", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => sessions.id),
+  inputText: text("input_text").notNull(),
+  targetOutput: text("target_output").notNull(), // GPT model output
+  modelOutput: text("model_output"), // Our model's output
+  loss: real("loss"), // Error between target and model output
+  gradientUpdates: jsonb("gradient_updates"),
+  tokens: jsonb("tokens"), // Tokenized input/output
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+export const learningMetrics = pgTable("learning_metrics", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => sessions.id),
+  epoch: integer("epoch").notNull(),
+  totalLoss: real("total_loss").notNull(),
+  averageLoss: real("average_loss").notNull(),
+  perplexity: real("perplexity"),
+  bleuScore: real("bleu_score"), // Similarity to GPT output
+  convergenceRate: real("convergence_rate"),
+  vocabularySize: integer("vocabulary_size"),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
 // Insert schemas
 export const insertSessionSchema = createInsertSchema(sessions).pick({
   name: true,
@@ -81,6 +129,50 @@ export const insertGeneratedContentSchema = createInsertSchema(generatedContent)
   goalAlignment: true,
 });
 
+export const insertModelWeightsSchema = createInsertSchema(modelWeights).pick({
+  sessionId: true,
+  layerName: true,
+  weights: true,
+  biases: true,
+  gradients: true,
+  learningRate: true,
+});
+
+export const insertTokenVocabularySchema = createInsertSchema(tokenVocabulary).pick({
+  sessionId: true,
+  token: true,
+  tokenId: true,
+  frequency: true,
+  embedding: true,
+  subwordComponents: true,
+});
+
+export const insertTrainingBatchSchema = createInsertSchema(trainingBatches).pick({
+  sessionId: true,
+  inputText: true,
+  targetOutput: true,
+  modelOutput: true,
+  loss: true,
+  gradientUpdates: true,
+  tokens: true,
+});
+
+export const insertLearningMetricsSchema = createInsertSchema(learningMetrics).pick({
+  sessionId: true,
+  epoch: true,
+  totalLoss: true,
+  averageLoss: true,
+  perplexity: true,
+  bleuScore: true,
+  convergenceRate: true,
+  vocabularySize: true,
+});
+
+export const insertUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true,
+});
+
 // Types
 export type InsertSession = z.infer<typeof insertSessionSchema>;
 export type Session = typeof sessions.$inferSelect;
@@ -92,11 +184,14 @@ export type InsertGeneratedContent = z.infer<typeof insertGeneratedContentSchema
 export type GeneratedContent = typeof generatedContent.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
+export type InsertModelWeights = z.infer<typeof insertModelWeightsSchema>;
+export type ModelWeights = typeof modelWeights.$inferSelect;
+export type InsertTokenVocabulary = z.infer<typeof insertTokenVocabularySchema>;
+export type TokenVocabulary = typeof tokenVocabulary.$inferSelect;
+export type InsertTrainingBatch = z.infer<typeof insertTrainingBatchSchema>;
+export type TrainingBatch = typeof trainingBatches.$inferSelect;
+export type InsertLearningMetrics = z.infer<typeof insertLearningMetricsSchema>;
+export type LearningMetrics = typeof learningMetrics.$inferSelect;
 
 // Additional types for real-time communication
 export type ReflectionMessage = {

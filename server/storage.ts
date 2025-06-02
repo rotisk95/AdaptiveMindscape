@@ -1,9 +1,13 @@
 import { 
-  users, sessions, reflections, memoryInsights, generatedContent,
+  users, sessions, reflections, memoryInsights, generatedContent, modelWeights, tokenVocabulary, trainingBatches, learningMetrics,
   type User, type InsertUser, type Session, type InsertSession,
   type Reflection, type InsertReflection, type MemoryInsight, type InsertMemoryInsight,
-  type GeneratedContent, type InsertGeneratedContent
+  type GeneratedContent, type InsertGeneratedContent, type ModelWeights, type InsertModelWeights,
+  type TokenVocabulary, type InsertTokenVocabulary, type TrainingBatch, type InsertTrainingBatch,
+  type LearningMetrics, type InsertLearningMetrics
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -33,181 +37,265 @@ export interface IStorage {
   createGeneratedContent(content: InsertGeneratedContent): Promise<GeneratedContent>;
   getGeneratedContentBySession(sessionId: number): Promise<GeneratedContent[]>;
   updateGeneratedContent(id: number, updates: Partial<GeneratedContent>): Promise<GeneratedContent>;
+
+  // Neural Network Components
+  createModelWeights(weights: InsertModelWeights): Promise<ModelWeights>;
+  getModelWeightsBySession(sessionId: number): Promise<ModelWeights[]>;
+  updateModelWeights(id: number, updates: Partial<ModelWeights>): Promise<ModelWeights>;
+  
+  // Tokenization
+  createTokenVocabulary(token: InsertTokenVocabulary): Promise<TokenVocabulary>;
+  getTokenVocabularyBySession(sessionId: number): Promise<TokenVocabulary[]>;
+  getTokenByValue(sessionId: number, token: string): Promise<TokenVocabulary | undefined>;
+  
+  // Training
+  createTrainingBatch(batch: InsertTrainingBatch): Promise<TrainingBatch>;
+  getTrainingBatchesBySession(sessionId: number): Promise<TrainingBatch[]>;
+  
+  // Learning Metrics
+  createLearningMetrics(metrics: InsertLearningMetrics): Promise<LearningMetrics>;
+  getLearningMetricsBySession(sessionId: number): Promise<LearningMetrics[]>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private sessions: Map<number, Session>;
-  private reflections: Map<number, Reflection>;
-  private memoryInsights: Map<number, MemoryInsight>;
-  private generatedContent: Map<number, GeneratedContent>;
-  private currentUserId: number;
-  private currentSessionId: number;
-  private currentReflectionId: number;
-  private currentMemoryInsightId: number;
-  private currentGeneratedContentId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.sessions = new Map();
-    this.reflections = new Map();
-    this.memoryInsights = new Map();
-    this.generatedContent = new Map();
-    this.currentUserId = 1;
-    this.currentSessionId = 1;
-    this.currentReflectionId = 1;
-    this.currentMemoryInsightId = 1;
-    this.currentGeneratedContentId = 1;
-  }
-
+export class DatabaseStorage implements IStorage {
   // Users
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(user => user.username === username);
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
     return user;
   }
 
   // Sessions
   async createSession(insertSession: InsertSession): Promise<Session> {
-    const id = this.currentSessionId++;
-    const session: Session = {
-      ...insertSession,
-      id,
-      isActive: true,
-      startTime: new Date(),
-      endTime: null,
-      totalReflections: 0,
-      improvementRate: 0,
-    };
-    this.sessions.set(id, session);
+    const [session] = await db
+      .insert(sessions)
+      .values({
+        ...insertSession,
+        isActive: true,
+        totalReflections: 0,
+        improvementRate: 0,
+      })
+      .returning();
     return session;
   }
 
   async getSession(id: number): Promise<Session | undefined> {
-    return this.sessions.get(id);
+    const [session] = await db.select().from(sessions).where(eq(sessions.id, id));
+    return session || undefined;
   }
 
   async getActiveSessions(): Promise<Session[]> {
-    return Array.from(this.sessions.values()).filter(session => session.isActive);
+    return await db.select().from(sessions).where(eq(sessions.isActive, true));
   }
 
   async getAllSessions(): Promise<Session[]> {
-    return Array.from(this.sessions.values()).sort((a, b) => 
-      new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-    );
+    return await db.select().from(sessions).orderBy(desc(sessions.startTime));
   }
 
   async updateSession(id: number, updates: Partial<Session>): Promise<Session> {
-    const session = this.sessions.get(id);
+    const [session] = await db
+      .update(sessions)
+      .set(updates)
+      .where(eq(sessions.id, id))
+      .returning();
     if (!session) throw new Error(`Session ${id} not found`);
-    
-    const updatedSession = { ...session, ...updates };
-    this.sessions.set(id, updatedSession);
-    return updatedSession;
+    return session;
   }
 
   async endSession(id: number): Promise<Session> {
-    const session = this.sessions.get(id);
+    const [session] = await db
+      .update(sessions)
+      .set({ isActive: false, endTime: new Date() })
+      .where(eq(sessions.id, id))
+      .returning();
     if (!session) throw new Error(`Session ${id} not found`);
-    
-    const updatedSession = { 
-      ...session, 
-      isActive: false, 
-      endTime: new Date() 
-    };
-    this.sessions.set(id, updatedSession);
-    return updatedSession;
+    return session;
   }
 
   // Reflections
   async createReflection(insertReflection: InsertReflection): Promise<Reflection> {
-    const id = this.currentReflectionId++;
-    const reflection: Reflection = {
-      ...insertReflection,
-      id,
-      timestamp: new Date(),
-    };
-    this.reflections.set(id, reflection);
+    const [reflection] = await db
+      .insert(reflections)
+      .values(insertReflection)
+      .returning();
     
-    // Update session reflection count
-    const session = this.sessions.get(insertReflection.sessionId);
-    if (session) {
-      const updatedSession = { ...session, totalReflections: session.totalReflections + 1 };
-      this.sessions.set(insertReflection.sessionId, updatedSession);
-    }
+    // Update session reflection count (simplified)
+    const reflectionCount = await db
+      .select()
+      .from(reflections)
+      .where(eq(reflections.sessionId, insertReflection.sessionId!));
+    
+    await db
+      .update(sessions)
+      .set({ totalReflections: reflectionCount.length })
+      .where(eq(sessions.id, insertReflection.sessionId!));
     
     return reflection;
   }
 
   async getReflectionsBySession(sessionId: number): Promise<Reflection[]> {
-    return Array.from(this.reflections.values())
-      .filter(reflection => reflection.sessionId === sessionId)
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return await db
+      .select()
+      .from(reflections)
+      .where(eq(reflections.sessionId, sessionId))
+      .orderBy(reflections.timestamp);
   }
 
   async getReflection(id: number): Promise<Reflection | undefined> {
-    return this.reflections.get(id);
+    const [reflection] = await db.select().from(reflections).where(eq(reflections.id, id));
+    return reflection || undefined;
   }
 
   // Memory Insights
   async createMemoryInsight(insertInsight: InsertMemoryInsight): Promise<MemoryInsight> {
-    const id = this.currentMemoryInsightId++;
-    const insight: MemoryInsight = {
-      ...insertInsight,
-      id,
-      timestamp: new Date(),
-    };
-    this.memoryInsights.set(id, insight);
+    const [insight] = await db
+      .insert(memoryInsights)
+      .values(insertInsight)
+      .returning();
     return insight;
   }
 
   async getMemoryInsightsBySession(sessionId: number): Promise<MemoryInsight[]> {
-    return Array.from(this.memoryInsights.values())
-      .filter(insight => insight.sessionId === sessionId)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return await db
+      .select()
+      .from(memoryInsights)
+      .where(eq(memoryInsights.sessionId, sessionId))
+      .orderBy(desc(memoryInsights.timestamp));
   }
 
   async getRecentMemoryInsights(limit: number): Promise<MemoryInsight[]> {
-    return Array.from(this.memoryInsights.values())
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, limit);
+    return await db
+      .select()
+      .from(memoryInsights)
+      .orderBy(desc(memoryInsights.timestamp))
+      .limit(limit);
   }
 
   // Generated Content
   async createGeneratedContent(insertContent: InsertGeneratedContent): Promise<GeneratedContent> {
-    const id = this.currentGeneratedContentId++;
-    const content: GeneratedContent = {
-      ...insertContent,
-      id,
-      timestamp: new Date(),
-    };
-    this.generatedContent.set(id, content);
+    const [content] = await db
+      .insert(generatedContent)
+      .values(insertContent)
+      .returning();
     return content;
   }
 
   async getGeneratedContentBySession(sessionId: number): Promise<GeneratedContent[]> {
-    return Array.from(this.generatedContent.values())
-      .filter(content => content.sessionId === sessionId)
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return await db
+      .select()
+      .from(generatedContent)
+      .where(eq(generatedContent.sessionId, sessionId))
+      .orderBy(generatedContent.timestamp);
   }
 
   async updateGeneratedContent(id: number, updates: Partial<GeneratedContent>): Promise<GeneratedContent> {
-    const content = this.generatedContent.get(id);
+    const [content] = await db
+      .update(generatedContent)
+      .set(updates)
+      .where(eq(generatedContent.id, id))
+      .returning();
     if (!content) throw new Error(`Generated content ${id} not found`);
-    
-    const updatedContent = { ...content, ...updates };
-    this.generatedContent.set(id, updatedContent);
-    return updatedContent;
+    return content;
+  }
+
+  // Neural Network Components
+  async createModelWeights(insertWeights: InsertModelWeights): Promise<ModelWeights> {
+    const [weights] = await db
+      .insert(modelWeights)
+      .values(insertWeights)
+      .returning();
+    return weights;
+  }
+
+  async getModelWeightsBySession(sessionId: number): Promise<ModelWeights[]> {
+    return await db
+      .select()
+      .from(modelWeights)
+      .where(eq(modelWeights.sessionId, sessionId))
+      .orderBy(desc(modelWeights.lastUpdated));
+  }
+
+  async updateModelWeights(id: number, updates: Partial<ModelWeights>): Promise<ModelWeights> {
+    const [weights] = await db
+      .update(modelWeights)
+      .set(updates)
+      .where(eq(modelWeights.id, id))
+      .returning();
+    if (!weights) throw new Error(`Model weights ${id} not found`);
+    return weights;
+  }
+
+  // Tokenization
+  async createTokenVocabulary(insertToken: InsertTokenVocabulary): Promise<TokenVocabulary> {
+    const [token] = await db
+      .insert(tokenVocabulary)
+      .values(insertToken)
+      .returning();
+    return token;
+  }
+
+  async getTokenVocabularyBySession(sessionId: number): Promise<TokenVocabulary[]> {
+    return await db
+      .select()
+      .from(tokenVocabulary)
+      .where(eq(tokenVocabulary.sessionId, sessionId))
+      .orderBy(desc(tokenVocabulary.frequency));
+  }
+
+  async getTokenByValue(sessionId: number, token: string): Promise<TokenVocabulary | undefined> {
+    const [tokenRecord] = await db
+      .select()
+      .from(tokenVocabulary)
+      .where(eq(tokenVocabulary.sessionId, sessionId))
+      .where(eq(tokenVocabulary.token, token));
+    return tokenRecord || undefined;
+  }
+
+  // Training
+  async createTrainingBatch(insertBatch: InsertTrainingBatch): Promise<TrainingBatch> {
+    const [batch] = await db
+      .insert(trainingBatches)
+      .values(insertBatch)
+      .returning();
+    return batch;
+  }
+
+  async getTrainingBatchesBySession(sessionId: number): Promise<TrainingBatch[]> {
+    return await db
+      .select()
+      .from(trainingBatches)
+      .where(eq(trainingBatches.sessionId, sessionId))
+      .orderBy(trainingBatches.timestamp);
+  }
+
+  // Learning Metrics
+  async createLearningMetrics(insertMetrics: InsertLearningMetrics): Promise<LearningMetrics> {
+    const [metrics] = await db
+      .insert(learningMetrics)
+      .values(insertMetrics)
+      .returning();
+    return metrics;
+  }
+
+  async getLearningMetricsBySession(sessionId: number): Promise<LearningMetrics[]> {
+    return await db
+      .select()
+      .from(learningMetrics)
+      .where(eq(learningMetrics.sessionId, sessionId))
+      .orderBy(learningMetrics.epoch);
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
