@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 222 84% 4.9%; /* #0f172a - slate-900 */
+  --foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+  --muted: 217 32% 17%; /* #334155 - slate-700 */
+  --muted-foreground: 215 20% 65%; /* #94a3b8 - slate-400 */
+  --popover: 222 84% 4.9%; /* #0f172a - slate-900 */
+  --popover-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+  --card: 215 28% 17%; /* #1e293b - slate-800 */
+  --card-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+  --border: 215 28% 17%; /* #1e293b - slate-800 */
+  --input: 215 28% 17%; /* #1e293b - slate-800 */
+  --primary: 207 90% 54%; /* #3b82f6 - blue-500 */
+  --primary-foreground: 211 100% 99%; /* #dbeafe - blue-50 */
+  --secondary: 215 28% 17%; /* #1e293b - slate-800 */
+  --secondary-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+  --accent: 215 28% 17%; /* #1e293b - slate-800 */
+  --accent-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+  --destructive: 0 84.2% 60.2%; /* #ef4444 - red-500 */
+  --destructive-foreground: 60 9.1% 97.8%; /* #fefefe - white */
+  --ring: 207 90% 54%; /* #3b82f6 - blue-500 */
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 222 84% 4.9%; /* #0f172a - slate-900 */
+  --foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+  --muted: 217 32% 17%; /* #334155 - slate-700 */
+  --muted-foreground: 215 20% 65%; /* #94a3b8 - slate-400 */
+  --popover: 222 84% 4.9%; /* #0f172a - slate-900 */
+  --popover-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+  --card: 215 28% 17%; /* #1e293b - slate-800 */
+  --card-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+  --border: 215 28% 17%; /* #1e293b - slate-800 */
+  --input: 215 28% 17%; /* #1e293b - slate-800 */
+  --primary: 207 90% 54%; /* #3b82f6 - blue-500 */
+  --primary-foreground: 211 100% 99%; /* #dbeafe - blue-50 */
+  --secondary: 215 28% 17%; /* #1e293b - slate-800 */
+  --secondary-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+  --accent: 215 28% 17%; /* #1e293b - slate-800 */
+  --accent-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+  --destructive: 0 84.2% 60.2%; /* #ef4444 - red-500 */
+  --destructive-foreground: 60 9.1% 97.8%; /* #fefefe - white */
+  --ring: 207 90% 54%; /* #3b82f6 - blue-500 */
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+/* Custom scrollbar styles for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground));
+}
+
+/* Custom animation for gradient buttons */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.gradient-button {
+  background: linear-gradient(-45deg, #3b82f6, #06b6d4, #8b5cf6, #3b82f6);
+  background-size: 400% 400%;
+  animation: gradient-shift 3s ease infinite;
+}
