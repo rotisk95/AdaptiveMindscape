@@ -29,7 +29,7 @@ export function PerformanceMetrics({ data }: PerformanceMetricsProps) {
             <span className="text-sm font-medium text-slate-300">Learning Progress</span>
             <span className="text-sm font-mono text-blue-400">+{data.learningProgress}%</span>
           </div>
-          <Progress value={76} className="h-2" />
+          <Progress value={data.learningProgress} className="h-2" />
         </CardContent>
       </Card>
       
